@@ -1,5 +1,23 @@
 %module mpidplugin
 
+%{
+#include "MPIDForce.h"
+#include "OpenMM.h"
+#include "OpenMMAmoeba.h"
+#include "OpenMMDrude.h"
+#include "openmm/RPMDIntegrator.h"
+#include "openmm/RPMDMonteCarloBarostat.h"
+
+using namespace OpenMM;
+using OpenMM::Vec3;
+%}
+
+%{
+#include <numpy/arrayobject.h>
+%}
+
+%include "header.i"
+
 %import(module="openmm") "swig/OpenMMSwigHeaders.i"
 %include "swig/typemaps.i"
 
@@ -15,14 +33,6 @@ namespace std {
   %template(vectori) vector<int>;
 };
 
-%{
-#include "MPIDForce.h"
-#include "OpenMM.h"
-#include "OpenMMAmoeba.h"
-#include "OpenMMDrude.h"
-#include "openmm/RPMDIntegrator.h"
-#include "openmm/RPMDMonteCarloBarostat.h"
-%}
 
 %pythoncode %{
 import openmm as mm
@@ -429,18 +439,18 @@ public:
      * @param context         the Context for which to get the fixed dipoles
      * @param[out] dipoles    the fixed dipole moment of particle i is stored into the i'th element
      */
-    %apply std::vector<OpenMM::Vec3>& OUTPUT { std::vector<OpenMM::Vec3>& dipoles };
-    void getLabFramePermanentDipoles(Context& context, std::vector<OpenMM::Vec3>& dipoles);
-    %clear std::vector<OpenMM::Vec3>& dipoles;
+    %apply std::vector<Vec3>& OUTPUT { std::vector<Vec3>& dipoles };
+    void getLabFramePermanentDipoles(Context& context, std::vector<Vec3>& dipoles);
+    %clear std::vector<Vec3>& dipoles;
     /**
      * Get the induced dipole moments of all particles.
      *
      * @param context         the Context for which to get the induced dipoles
      * @param[out] dipoles    the induced dipole moment of particle i is stored into the i'th element
      */
-    %apply std::vector<OpenMM::Vec3>& OUTPUT { std::vector<OpenMM::Vec3>& dipoles };
-    void getInducedDipoles(Context& context, std::vector<OpenMM::Vec3>& dipoles);
-    %clear std::vector<OpenMM::Vec3>& dipoles;
+    %apply std::vector<Vec3>& OUTPUT { std::vector<Vec3>& dipoles };
+    void getInducedDipoles(Context& context, std::vector<Vec3>& dipoles);
+    %clear std::vector<Vec3>& dipoles;
 
     /**
      * Get the total dipole moments (fixed plus induced) of all particles.
@@ -448,9 +458,9 @@ public:
      * @param context         the Context for which to get the total dipoles
      * @param[out] dipoles    the total dipole moment of particle i is stored into the i'th element
      */
-    %apply std::vector<OpenMM::Vec3>& OUTPUT { std::vector<OpenMM::Vec3>& dipoles };
-    void getTotalDipoles(Context& context, std::vector<OpenMM::Vec3>& dipoles);
-    %clear std::vector<OpenMM::Vec3>& dipoles;
+    %apply std::vector<Vec3>& OUTPUT { std::vector<Vec3>& dipoles };
+    void getTotalDipoles(Context& context, std::vector<Vec3>& dipoles);
+    %clear std::vector<Vec3>& dipoles;
 
     /**
      * Get the electrostatic potential.
@@ -460,7 +470,7 @@ public:
      * @param[out] outputElectrostaticPotential output potential
      */
     %apply std::vector<double>& OUTPUT { std::vector<double>& outputElectrostaticPotential };
-    void getElectrostaticPotential(const std::vector< OpenMM::Vec3 >& inputGrid,
+    void getElectrostaticPotential(const std::vector< Vec3 >& inputGrid,
                                     Context& context, std::vector< double >& outputElectrostaticPotential);
     %clear std::vector<double>& outputElectrostaticPotential;
 
