@@ -26,6 +26,11 @@
 #include "jama_svd.h"
 #include <algorithm>
 
+#ifdef _MSC_VER
+	#define POCKETFFT_NO_VECTORS
+#endif
+#include "pocketfft_hdronly.h"
+
 // In case we're using some primitive version of Visual Studio this will
 // make sure that erf() and erfc() are defined.
 #include "openmm/internal/MSVC_erfc.h"
@@ -2546,16 +2551,16 @@ MPIDReferencePmeForce::MPIDReferencePmeForce() :
                _pmeGridSize(0), _totalGridSize(0), _alphaEwald(0.0)
 {
 
-    _fftplan = NULL;
+    // _fftplan = NULL;
     _pmeGrid = NULL;
     _pmeGridDimensions = IntVec(-1, -1, -1);
 }
 
 MPIDReferencePmeForce::~MPIDReferencePmeForce()
 {
-    if (_fftplan) {
-        fftpack_destroy(_fftplan);
-    }
+    // if (_fftplan) {
+    //     fftpack_destroy(_fftplan);
+    // }
     if (_pmeGrid) {
         delete [] _pmeGrid;
     }
@@ -2600,10 +2605,10 @@ void MPIDReferencePmeForce::setPmeGridDimensions(vector<int>& pmeGridDimensions)
         (pmeGridDimensions[2] == _pmeGridDimensions[2]))
         return;
 
-    if (_fftplan) {
-        fftpack_destroy(_fftplan);
-    }
-    fftpack_init_3d(&_fftplan,pmeGridDimensions[0], pmeGridDimensions[1], pmeGridDimensions[2]);
+    // if (_fftplan) {
+    //     fftpack_destroy(_fftplan);
+    // }
+    // fftpack_init_3d(&_fftplan,pmeGridDimensions[0], pmeGridDimensions[1], pmeGridDimensions[2]);
 
     _pmeGridDimensions[0] = pmeGridDimensions[0];
     _pmeGridDimensions[1] = pmeGridDimensions[1];
@@ -2645,7 +2650,8 @@ void MPIDReferencePmeForce::resizePmeArrays()
         if (_pmeGrid) {
             delete _pmeGrid;
         }
-        _pmeGrid      = new t_complex[_totalGridSize];
+        // _pmeGrid      = new t_complex[_totalGridSize];
+        _pmeGrid      = new complex<double>[_totalGridSize];
         _pmeGridSize  = _totalGridSize;
     }
 
@@ -2665,7 +2671,8 @@ void MPIDReferencePmeForce::initializePmeGrid()
         return;
 
     for (int jj = 0; jj < _totalGridSize; jj++)
-        _pmeGrid[jj].re = _pmeGrid[jj].im = 0.0;
+        // _pmeGrid[jj].re = _pmeGrid[jj].im = 0.0;
+        _pmeGrid[jj] = complex<double>(0, 0);
 }
 
 void MPIDReferencePmeForce::getPeriodicDelta(Vec3& deltaR) const
@@ -2928,9 +2935,16 @@ void MPIDReferencePmeForce::calculateFixedMultipoleField(const vector<MultipoleP
     computeMPIDBsplines(particleData);
     initializePmeGrid();
     spreadFixedMultipolesOntoGrid(particleData);
-    fftpack_exec_3d(_fftplan, FFTPACK_FORWARD, _pmeGrid, _pmeGrid);
+    // fftpack_exec_3d(_fftplan, FFTPACK_FORWARD, _pmeGrid, _pmeGrid);
+	vector<size_t> shape = {(size_t) _pmeGridDimensions[0], (size_t) _pmeGridDimensions[1], (size_t) _pmeGridDimensions[2]};
+    vector<size_t> axes = {0, 1, 2};
+    vector<ptrdiff_t> stride = {(ptrdiff_t) (_pmeGridDimensions[1]*_pmeGridDimensions[2]*sizeof(complex<double>)),
+                                (ptrdiff_t) (_pmeGridDimensions[2]*sizeof(complex<double>)),
+                                (ptrdiff_t) sizeof(complex<double>)};
+    pocketfft::c2c(shape, stride, stride, axes, true, _pmeGrid, _pmeGrid, 1.0, 0);
     performMPIDReciprocalConvolution();
-    fftpack_exec_3d(_fftplan, FFTPACK_BACKWARD, _pmeGrid, _pmeGrid);
+    // fftpack_exec_3d(_fftplan, FFTPACK_BACKWARD, _pmeGrid, _pmeGrid);
+	pocketfft::c2c(shape, stride, stride, axes, false, _pmeGrid, _pmeGrid, 1.0, 0);
     computeFixedPotentialFromGrid();
     recordFixedMultipoleField();
 
@@ -3274,7 +3288,8 @@ void MPIDReferencePmeForce::spreadFixedMultipolesOntoGrid(const vector<Multipole
     // Clear the grid.
 
     for (int gridIndex = 0; gridIndex < _totalGridSize; gridIndex++)
-        _pmeGrid[gridIndex] = t_complex(0, 0);
+        // _pmeGrid[gridIndex] = t_complex(0, 0);
+        _pmeGrid[gridIndex] =complex<double>(0, 0);
 
     // Loop over atoms and spread them on the grid.
 
@@ -3318,8 +3333,10 @@ void MPIDReferencePmeForce::spreadFixedMultipolesOntoGrid(const vector<Multipole
                     double term2 = atomQuadrupoleXX * u[0] * v[0]
                                  + atomOctopoleXXY*u[1]*v[0] + atomOctopoleXXZ*u[0]*v[1];
                     double term3 = atomOctopoleXXX*u[0]*v[0];
-                    t_complex& gridValue = _pmeGrid[x*_pmeGridDimensions[1]*_pmeGridDimensions[2]+y*_pmeGridDimensions[2]+z];
-                    gridValue.re += term0*t[0] + term1*t[1] + term2*t[2] + term3*t[3];
+                    // t_complex& gridValue = _pmeGrid[x*_pmeGridDimensions[1]*_pmeGridDimensions[2]+y*_pmeGridDimensions[2]+z];
+                    // gridValue.re += term0*t[0] + term1*t[1] + term2*t[2] + term3*t[3];
+                    complex<double>& gridValue = _pmeGrid[x*_pmeGridDimensions[1]*_pmeGridDimensions[2]+y*_pmeGridDimensions[2]+z];
+                    gridValue += term0*t[0] + term1*t[1] + term2*t[2] + term3*t[3];
                 }
             }
         }
@@ -3340,7 +3357,8 @@ void MPIDReferencePmeForce::performMPIDReciprocalConvolution()
         int kz = remainder-ky*_pmeGridDimensions[2];
 
         if (kx == 0 && ky == 0 && kz == 0) {
-            _pmeGrid[index].re = _pmeGrid[index].im = 0.0;
+            // _pmeGrid[index].re = _pmeGrid[index].im = 0.0;
+            _pmeGrid[index] = complex<double>(0, 0);
             continue;
         }
 
@@ -3360,8 +3378,9 @@ void MPIDReferencePmeForce::performMPIDReciprocalConvolution()
         double denom = m2*bx*by*bz;
         double eterm = scaleFactor*exp(-expFactor*m2)/denom;
 
-        _pmeGrid[index].re *= eterm;
-        _pmeGrid[index].im *= eterm;
+        // _pmeGrid[index].re *= eterm;
+        // _pmeGrid[index].im *= eterm;
+        _pmeGrid[index] *= eterm;
     }
 }
 
@@ -3431,7 +3450,8 @@ void MPIDReferencePmeForce::computeFixedPotentialFromGrid()
                 for (int ix = 0; ix < MPID_PME_ORDER; ix++) {
                     int i = gridPoint[0]+ix-(gridPoint[0]+ix >= _pmeGridDimensions[0] ? _pmeGridDimensions[0] : 0);
                     int gridIndex = i*_pmeGridDimensions[1]*_pmeGridDimensions[2] + j*_pmeGridDimensions[2] + k;
-                    double tq = _pmeGrid[gridIndex].re;
+					// double tq = _pmeGrid[gridIndex].re;
+                    double tq = _pmeGrid[gridIndex].real();
                     double5 tadd = _thetai[0][m*MPID_PME_ORDER+ix];
                     t[0] += tq*tadd[0];
                     t[1] += tq*tadd[1];
@@ -3540,7 +3560,8 @@ void MPIDReferencePmeForce::spreadInducedDipolesOnGrid(const vector<Vec3>& input
     // Clear the grid.
 
     for (int gridIndex = 0; gridIndex < _totalGridSize; gridIndex++)
-        _pmeGrid[gridIndex] = t_complex(0, 0);
+        // _pmeGrid[gridIndex] = t_complex(0, 0);
+        _pmeGrid[gridIndex] = complex<double>(0, 0);
 
     // Loop over atoms and spread them on the grid.
 
@@ -3563,9 +3584,11 @@ void MPIDReferencePmeForce::spreadInducedDipolesOnGrid(const vector<Vec3>& input
                     double term01 = inducedDipole[1]*u[1]*v[0] + inducedDipole[2]*u[0]*v[1];
                     double term11 = inducedDipole[0]*u[0]*v[0];
 
-                    t_complex& gridValue = _pmeGrid[x*_pmeGridDimensions[1]*_pmeGridDimensions[2]+y*_pmeGridDimensions[2]+z];
-                    gridValue.re += term01*t[0] + term11*t[1];
-                    gridValue.im = 0.0;
+                    // t_complex& gridValue = _pmeGrid[x*_pmeGridDimensions[1]*_pmeGridDimensions[2]+y*_pmeGridDimensions[2]+z];
+                    // gridValue.re += term01*t[0] + term11*t[1];
+                    // gridValue.im = 0.0;
+                    complex<double>& gridValue = _pmeGrid[x*_pmeGridDimensions[1]*_pmeGridDimensions[2]+y*_pmeGridDimensions[2]+z];
+                    gridValue += complex<double>(term01*t[0] + term11*t[1], 0.0);
                 }
             }
         }
@@ -3638,7 +3661,8 @@ void MPIDReferencePmeForce::computeInducedPotentialFromGrid()
                 for (int ix = 0; ix < MPID_PME_ORDER; ix++) {
                     int i = gridPoint[0]+ix-(gridPoint[0]+ix >= _pmeGridDimensions[0] ? _pmeGridDimensions[0] : 0);
                     int gridIndex = i*_pmeGridDimensions[1]*_pmeGridDimensions[2] + j*_pmeGridDimensions[2] + k;
-                    double tq = _pmeGrid[gridIndex].re;
+                    // double tq = _pmeGrid[gridIndex].re;
+                    double tq = _pmeGrid[gridIndex].real();
                     double5 tadd = _thetai[0][m*MPID_PME_ORDER+ix];
                     t[0] += tq*tadd[0];
                     t[1] += tq*tadd[1];
@@ -4063,9 +4087,16 @@ void MPIDReferencePmeForce::calculateReciprocalSpaceInducedDipoleField(vector<Up
 
     initializePmeGrid();
     spreadInducedDipolesOnGrid(*updateInducedDipoleFields[0].inducedDipoles);
-    fftpack_exec_3d(_fftplan, FFTPACK_FORWARD, _pmeGrid, _pmeGrid);
+    // fftpack_exec_3d(_fftplan, FFTPACK_FORWARD, _pmeGrid, _pmeGrid);
+	vector<size_t> shape = {(size_t) _pmeGridDimensions[0], (size_t) _pmeGridDimensions[1], (size_t) _pmeGridDimensions[2]};
+    vector<size_t> axes = {0, 1, 2};
+    vector<ptrdiff_t> stride = {(ptrdiff_t) (_pmeGridDimensions[1]*_pmeGridDimensions[2]*sizeof(complex<double>)),
+                                (ptrdiff_t) (_pmeGridDimensions[2]*sizeof(complex<double>)),
+                                (ptrdiff_t) sizeof(complex<double>)};
+    pocketfft::c2c(shape, stride, stride, axes, true, _pmeGrid, _pmeGrid, 1.0, 0);
     performMPIDReciprocalConvolution();
-    fftpack_exec_3d(_fftplan, FFTPACK_BACKWARD, _pmeGrid, _pmeGrid);
+    // fftpack_exec_3d(_fftplan, FFTPACK_BACKWARD, _pmeGrid, _pmeGrid);
+	pocketfft::c2c(shape, stride, stride, axes, false, _pmeGrid, _pmeGrid, 1.0, 0);
     computeInducedPotentialFromGrid();
     recordInducedDipoleField(updateInducedDipoleFields[0].inducedDipoleField);
 }
